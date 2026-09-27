@@ -89,4 +89,23 @@ h1 em { font-style: normal; background: var(--grad); -webkit-background-clip: te
 .feed-skel { width: 100%; aspect-ratio: 3/4; background: rgba(255,255,255,0.08); }
 .feed-item figcaption { padding: 8px 10px; font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
 
+.stats-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.racha { font-weight: 800; font-size: 15px; }
+
+.reacciones { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 10px 6px; }
+.reaccion { appearance: none; border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--fg); border-radius: 999px; padding: 4px 8px; font-size: 15px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; min-height: 30px; }
+.reaccion.on { background: var(--grad); border-color: transparent; }
+.reaccion-n { font-size: 12px; font-weight: 700; color: var(--muted); }
+.reaccion.on .reaccion-n { color: rgba(255,255,255,0.9); }
+
+.comentarios-toggle { padding: 4px 10px 10px; font-size: 13px; }
+.comentarios { padding: 0 10px 12px; display: grid; gap: 8px; }
+.comentario { margin: 0; font-size: 13px; line-height: 1.4; }
+.comentario-form { display: flex; gap: 6px; }
+.comentario-form .input { padding: 10px 12px; min-height: 40px; font-size: 14px; }
+.comentario-form .btn { padding: 10px 14px; min-height: 40px; font-size: 14px; }
+
+.ranking-fila { display: flex; align-items: center; gap: 10px; }
+.ranking-pos { font-size: 20px; width: 28px; text-align: center; flex: 0 0 auto; }
+
 @media (prefers-reduced-motion: reduce) { .orb { animation: none; } .btn:active { transform: none; } .scroller { scroll-behavior: auto; } }

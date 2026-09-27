@@ -4,10 +4,27 @@ import { compressImage, loadImageFromFile } from "./lib/image.js";
 
 const VENTANA_SEGUNDOS = 120; // 2 minutos, el "reto" personal desde que pulsas Empezar
 const EMOJIS_AVATAR = ["🙂", "😎", "🦊", "🐼", "🌵", "🍩", "🐸", "🦄", "🐙", "🐝", "🌙", "⚡"];
+const REACCIONES_DISPONIBLES = ["🔥", "😂", "😍", "👏", "😮", "💀"];
 
 function hoyISO() {
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" });
   return fmt.format(new Date());
+}
+
+function restarDias(fechaISO, n) {
+  const d = new Date(fechaISO + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+function calcularRacha(fechasSet, desde) {
+  let cursor = desde;
+  let n = 0;
+  while (fechasSet.has(cursor)) {
+    n++;
+    cursor = restarDias(cursor, 1);
+  }
+  return n;
 }
 
 function generarCodigo() {
@@ -407,11 +424,15 @@ function ListaGrupos({ grupos, perfil, error, aviso, setError, setAviso, onEntra
 // ============= GRUPO (reto del día + feed) =============
 
 function Grupo({ grupo, perfil, onVolver, onAjustes }) {
+  const [vistaGrupo, setVistaGrupo] = useState("reto"); // reto | ranking
   const [reto, setReto] = useState(null);
   const [cargandoReto, setCargandoReto] = useState(true);
   const [miEnvio, setMiEnvio] = useState(undefined); // undefined = sin comprobar, null = no enviado
   const [envios, setEnvios] = useState(null);
   const [urls, setUrls] = useState({});
+  const [reacciones, setReacciones] = useState({});
+  const [comentarios, setComentarios] = useState({});
+  const [racha, setRacha] = useState(0);
   const [empezado, setEmpezado] = useState(false);
   const [inicioTs, setInicioTs] = useState(null);
   const [restante, setRestante] = useState(VENTANA_SEGUNDOS);
@@ -459,7 +480,22 @@ function Grupo({ grupo, perfil, onVolver, onAjustes }) {
       .eq("user_id", perfil.id)
       .maybeSingle();
     setMiEnvio(data || null);
-    if (data) cargarFeed(retoId);
+    if (data) {
+      cargarFeed(retoId);
+      cargarRacha();
+    }
+  }
+
+  async function cargarRacha() {
+    const { data } = await supabase
+      .from("envios")
+      .select("retos(fecha)")
+      .eq("grupo_id", grupo.id)
+      .eq("user_id", perfil.id)
+      .order("creado_en", { ascending: false })
+      .limit(120);
+    const fechas = new Set((data || []).map((e) => e.retos?.fecha).filter(Boolean));
+    setRacha(calcularRacha(fechas, hoyISO()));
   }
 
   async function cargarFeed(retoId) {
@@ -480,6 +516,54 @@ function Grupo({ grupo, perfil, onVolver, onAjustes }) {
       if (signed) nuevas[en.id] = signed.signedUrl;
     }
     setUrls(nuevas);
+    await cargarInteracciones((data || []).map((en) => en.id));
+  }
+
+  async function cargarInteracciones(idsEnvios) {
+    if (!idsEnvios.length) {
+      setReacciones({});
+      setComentarios({});
+      return;
+    }
+    const [{ data: rs }, { data: cs }] = await Promise.all([
+      supabase.from("reacciones").select("*").in("envio_id", idsEnvios),
+      supabase
+        .from("comentarios")
+        .select("*, profiles(nombre, emoji_avatar)")
+        .in("envio_id", idsEnvios)
+        .order("creado_en", { ascending: true }),
+    ]);
+    const porEnvioR = {};
+    for (const r of rs || []) {
+      if (!porEnvioR[r.envio_id]) porEnvioR[r.envio_id] = { counts: {}, mia: null };
+      porEnvioR[r.envio_id].counts[r.emoji] = (porEnvioR[r.envio_id].counts[r.emoji] || 0) + 1;
+      if (r.user_id === perfil.id) porEnvioR[r.envio_id].mia = r.emoji;
+    }
+    setReacciones(porEnvioR);
+    const porEnvioC = {};
+    for (const c of cs || []) {
+      (porEnvioC[c.envio_id] ||= []).push(c);
+    }
+    setComentarios(porEnvioC);
+  }
+
+  async function reaccionar(envioId, emoji) {
+    const actual = reacciones[envioId]?.mia;
+    if (actual === emoji) {
+      await supabase.from("reacciones").delete().eq("envio_id", envioId).eq("user_id", perfil.id);
+    } else {
+      await supabase
+        .from("reacciones")
+        .upsert({ envio_id: envioId, grupo_id: grupo.id, user_id: perfil.id, emoji }, { onConflict: "envio_id,user_id" });
+    }
+    await cargarInteracciones((envios || []).map((en) => en.id));
+  }
+
+  async function comentar(envioId, texto) {
+    const limpio = texto.trim().slice(0, 200);
+    if (!limpio) return;
+    await supabase.from("comentarios").insert({ envio_id: envioId, grupo_id: grupo.id, user_id: perfil.id, texto: limpio });
+    await cargarInteracciones((envios || []).map((en) => en.id));
   }
 
   function empezar() {
@@ -510,6 +594,7 @@ function Grupo({ grupo, perfil, onVolver, onAjustes }) {
       if (eIns) throw eIns;
       setMiEnvio(envio);
       await cargarFeed(reto.id);
+      await cargarRacha();
     } catch (e) {
       setError(e.message || "No se ha podido subir la foto.");
     } finally {
@@ -522,6 +607,10 @@ function Grupo({ grupo, perfil, onVolver, onAjustes }) {
     const s = restante % 60;
     return `${m}:${String(s).padStart(2, "0")}`;
   }, [restante]);
+
+  if (vistaGrupo === "ranking") {
+    return <Ranking grupo={grupo} onVolver={() => setVistaGrupo("reto")} />;
+  }
 
   return (
     <div className="app">
@@ -607,25 +696,179 @@ function Grupo({ grupo, perfil, onVolver, onAjustes }) {
               <span className="reto-emoji">{reto.emoji}</span>
               <b>{reto.texto}</b>
             </div>
+
+            <div className="stats-bar">
+              {racha > 0 ? (
+                <span className="racha">🔥 Racha: {racha} {racha === 1 ? "día" : "días"}</span>
+              ) : (
+                <span />
+              )}
+              <button className="btn link" onClick={() => setVistaGrupo("ranking")}>
+                🏆 Clasificación
+              </button>
+            </div>
+
             <p className="label">
               {envios ? `${envios.length} ${envios.length === 1 ? "foto" : "fotos"} de hoy` : "Cargando el grupo…"}
             </p>
             <section className="feed">
               {envios?.map((en) => (
-                <figure className="feed-item" key={en.id}>
-                  {urls[en.id] ? <img src={urls[en.id]} alt={`Foto de ${en.profiles?.nombre}`} /> : <div className="feed-skel" />}
-                  <figcaption>
-                    <span>
-                      {en.profiles?.emoji_avatar} {en.profiles?.nombre}
-                    </span>
-                    {typeof en.segundos_tardados === "number" && (
-                      <span className="left">{en.segundos_tardados <= VENTANA_SEGUNDOS ? "a tiempo" : `+${en.segundos_tardados - VENTANA_SEGUNDOS}s tarde`}</span>
-                    )}
-                  </figcaption>
-                </figure>
+                <FotoCard
+                  key={en.id}
+                  en={en}
+                  url={urls[en.id]}
+                  datos={reacciones[en.id]}
+                  comentariosLista={comentarios[en.id] || []}
+                  onReaccionar={reaccionar}
+                  onComentar={comentar}
+                />
               ))}
             </section>
           </>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ============= TARJETA DE FOTO (reacciones + comentarios) =============
+
+function FotoCard({ en, url, datos, comentariosLista, onReaccionar, onComentar }) {
+  const [abierto, setAbierto] = useState(false);
+  const [texto, setTexto] = useState("");
+  const counts = datos?.counts || {};
+  const mia = datos?.mia || null;
+
+  return (
+    <figure className="feed-item">
+      {url ? <img src={url} alt={`Foto de ${en.profiles?.nombre}`} /> : <div className="feed-skel" />}
+      <figcaption>
+        <span>
+          {en.profiles?.emoji_avatar} {en.profiles?.nombre}
+        </span>
+        {typeof en.segundos_tardados === "number" && (
+          <span className="left">{en.segundos_tardados <= VENTANA_SEGUNDOS ? "a tiempo" : `+${en.segundos_tardados - VENTANA_SEGUNDOS}s tarde`}</span>
+        )}
+      </figcaption>
+
+      <div className="reacciones">
+        {REACCIONES_DISPONIBLES.map((em) => (
+          <button
+            key={em}
+            type="button"
+            className={"reaccion" + (mia === em ? " on" : "")}
+            onClick={() => onReaccionar(en.id, em)}
+            aria-pressed={mia === em}
+          >
+            {em}
+            {counts[em] ? <span className="reaccion-n">{counts[em]}</span> : null}
+          </button>
+        ))}
+      </div>
+
+      <button type="button" className="btn link comentarios-toggle" onClick={() => setAbierto((a) => !a)}>
+        💬 {comentariosLista.length ? `${comentariosLista.length} ${comentariosLista.length === 1 ? "comentario" : "comentarios"}` : "Comentar"}
+      </button>
+
+      {abierto && (
+        <div className="comentarios">
+          {comentariosLista.map((c) => (
+            <p className="comentario" key={c.id}>
+              <b>
+                {c.profiles?.emoji_avatar} {c.profiles?.nombre}:
+              </b>{" "}
+              {c.texto}
+            </p>
+          ))}
+          <form
+            className="comentario-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!texto.trim()) return;
+              onComentar(en.id, texto);
+              setTexto("");
+            }}
+          >
+            <input
+              className="input"
+              placeholder="Escribe un comentario…"
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              maxLength={200}
+            />
+            <button className="btn primary" type="submit">
+              Enviar
+            </button>
+          </form>
+        </div>
+      )}
+    </figure>
+  );
+}
+
+// ============= CLASIFICACIÓN SEMANAL =============
+
+function Ranking({ grupo, onVolver }) {
+  const [lista, setLista] = useState(null);
+  const [error, setError] = useState("");
+  const medallas = ["🥇", "🥈", "🥉"];
+
+  useEffect(() => {
+    (async () => {
+      const desde = restarDias(hoyISO(), 6);
+      const { data, error: e } = await supabase
+        .from("envios")
+        .select("user_id, segundos_tardados, profiles(nombre, emoji_avatar), retos!inner(fecha)")
+        .eq("grupo_id", grupo.id)
+        .gte("retos.fecha", desde);
+      if (e) {
+        setError(e.message);
+        return;
+      }
+      const porUsuario = {};
+      for (const en of data || []) {
+        const aTiempo = typeof en.segundos_tardados !== "number" || en.segundos_tardados <= VENTANA_SEGUNDOS;
+        const uid = en.user_id;
+        if (!porUsuario[uid]) {
+          porUsuario[uid] = { nombre: en.profiles?.nombre, emoji: en.profiles?.emoji_avatar, puntos: 0, fotos: 0 };
+        }
+        porUsuario[uid].puntos += aTiempo ? 15 : 5;
+        porUsuario[uid].fotos += 1;
+      }
+      setLista(Object.values(porUsuario).sort((a, b) => b.puntos - a.puntos));
+    })();
+  }, [grupo.id]);
+
+  return (
+    <div className="app">
+      <main className="screen">
+        <header className="brand row-between">
+          <span>Clasificación</span>
+          <button className="icon-btn" onClick={onVolver} aria-label="Volver">
+            ✕
+          </button>
+        </header>
+        <p className="lead">Puntos de los últimos 7 días: 15 si subes a tiempo, 5 si vas tarde.</p>
+
+        {error && <p className="error">{error}</p>}
+        {lista === null ? (
+          <p className="lead">Cargando…</p>
+        ) : lista.length === 0 ? (
+          <p className="lead">Aún no hay fotos esta semana.</p>
+        ) : (
+          <section className="examples">
+            {lista.map((u, i) => (
+              <div className="ex ranking-fila" key={u.nombre + i}>
+                <span className="ranking-pos">{medallas[i] || `${i + 1}.`}</span>
+                <b>
+                  {u.emoji} {u.nombre}
+                </b>
+                <span className="left">
+                  {u.puntos} pts · {u.fotos} {u.fotos === 1 ? "foto" : "fotos"}
+                </span>
+              </div>
+            ))}
+          </section>
         )}
       </main>
     </div>

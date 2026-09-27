@@ -92,6 +92,24 @@ git push -u origin main
 
 Cada vez que hagas `git push`, Netlify redespliega solo.
 
+## Reacciones, comentarios, racha y clasificación
+
+Además del reto diario, la app tiene:
+
+- **Reacciones**: cada foto del feed tiene 6 emoji para reaccionar (uno por persona, se puede
+  cambiar o quitar tocando otra vez).
+- **Comentarios**: cada foto tiene un apartado de comentarios cortos (200 caracteres) debajo.
+- **Racha**: si has subido foto varios días seguidos en un grupo, se muestra "🔥 Racha: N días"
+  en cuanto desbloqueas el feed de ese día.
+- **Clasificación semanal**: botón "🏆 Clasificación" dentro de cada grupo — puntos de los
+  últimos 7 días (15 puntos si subes a tiempo, 5 si vas tarde), con medallas para el top 3.
+
+Todo esto vive en dos tablas nuevas (`reacciones`, `comentarios`) protegidas con la misma
+regla de siempre: solo se ven si eres miembro del grupo y ya has subido tu foto de hoy.
+Si añades estas funciones a un proyecto ya desplegado, ejecuta una vez
+`supabase/migracion_2_interaccion.sql` en el SQL Editor de Supabase (no borra nada, solo añade
+las tablas y sus políticas).
+
 ## Ajustes rápidos
 
 - **Horario del reto**: la función programada `generar-reto.js` corre a las 08:00 UTC.
@@ -109,9 +127,6 @@ Cada vez que hagas `git push`, Netlify redespliega solo.
 - **Notificaciones push** de verdad (avisar a la hora del reto en vez de que cada uno
   abra la app cuando quiera) — necesitaría un servicio como OneSignal o Firebase Cloud
   Messaging, no está incluido en esta versión.
-- **Racha** (días seguidos subiendo foto) — se puede calcular a partir de la tabla
-  `envios`, no está en la interfaz todavía.
-- **Reacciones/comentarios** en las fotos del grupo.
 - **Play Store**: `npm install @capacitor/core @capacitor/cli @capacitor/android`,
   `npx cap init`, `npx cap add android`, y apunta las llamadas de `/api/...` a la URL
   absoluta de Netlify (en Capacitor no hay redirección relativa).
