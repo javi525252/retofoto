@@ -44,6 +44,7 @@ export default function App() {
   const [vista, setVista] = useState("grupos"); // grupos | grupo | ajustes-grupo
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
+  const [recuperando, setRecuperando] = useState(false);
 
   useEffect(() => {
     if (!supabaseConfigurado) {
@@ -54,7 +55,10 @@ export default function App() {
       setSesion(data.session);
       setCargando(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSesion(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === "PASSWORD_RECOVERY") setRecuperando(true);
+      setSesion(s);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -110,6 +114,7 @@ export default function App() {
     );
   }
 
+  if (recuperando) return <EstablecerPassword onListo={() => setRecuperando(false)} />;
   if (!sesion) return <Login />;
   if (!perfil) return <CrearPerfil sesion={sesion} onListo={setPerfil} />;
 
@@ -159,23 +164,59 @@ export default function App() {
 // ============= LOGIN =============
 
 function Login() {
+  const [modo, setModo] = useState("entrar"); // entrar | crear | recuperar
   const [email, setEmail] = useState("");
-  const [enviado, setEnviado] = useState(false);
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [enviando, setEnviando] = useState(false);
+  const [aviso, setAviso] = useState("");
+  const [cargando, setCargando] = useState(false);
 
-  async function enviarEnlace(e) {
+  async function entrar(e) {
     e.preventDefault();
     setError("");
-    setEnviando(true);
-    const { error: e2 } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: location.origin },
-    });
-    setEnviando(false);
-    if (e2) setError(e2.message);
-    else setEnviado(true);
+    setAviso("");
+    setCargando(true);
+    const { error: e2 } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    setCargando(false);
+    if (e2) {
+      // Cuenta antigua (creada con el enlace mágico de antes) sin contraseña todavía,
+      // o contraseña incorrecta: en ambos casos ofrecemos crear/restablecer la contraseña.
+      setError("Email o contraseña incorrectos. Si tu cuenta es antigua (de antes de tener contraseña), usa \"¿Olvidaste tu contraseña?\" para crear una.");
+    }
   }
+
+  async function crearCuenta(e) {
+    e.preventDefault();
+    setError("");
+    setAviso("");
+    setCargando(true);
+    const { data, error: e2 } = await supabase.auth.signUp({ email: email.trim(), password });
+    setCargando(false);
+    if (e2) {
+      setError(e2.message);
+      return;
+    }
+    if (!data.session) {
+      setAviso("📬 Te hemos enviado un email de confirmación. Ábrelo y luego vuelve aquí para entrar con tu contraseña.");
+    }
+  }
+
+  async function recuperar(e) {
+    e.preventDefault();
+    setError("");
+    setAviso("");
+    setCargando(true);
+    const { error: e2 } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: location.origin,
+    });
+    setCargando(false);
+    if (e2) setError(e2.message);
+    else setAviso("📬 Te hemos enviado un email con un enlace para crear tu contraseña. Ábrelo desde este dispositivo.");
+  }
+
+  const enviar = modo === "entrar" ? entrar : modo === "crear" ? crearCuenta : recuperar;
+  const textoBoton =
+    modo === "entrar" ? "Entrar" : modo === "crear" ? "Crear cuenta" : "Enviar enlace";
 
   return (
     <div className="app">
@@ -188,27 +229,98 @@ function Login() {
         </h1>
         <p className="lead">Una palabra o reto cada día. Subes tu foto en un par de minutos y desbloqueas las del grupo.</p>
 
-        {enviado ? (
-          <p className="aviso">
-            📬 Te hemos enviado un enlace a <b>{email}</b>. Ábrelo desde este mismo dispositivo para entrar.
-          </p>
-        ) : (
-          <form onSubmit={enviarEnlace} className="actions">
+        <form onSubmit={enviar} className="actions">
+          <input
+            className="input"
+            type="email"
+            required
+            placeholder="tu@email.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          {modo !== "recuperar" && (
             <input
               className="input"
-              type="email"
+              type="password"
               required
-              placeholder="tu@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              minLength={6}
+              placeholder="Contraseña"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
             />
-            <button className="btn primary" disabled={enviando} type="submit">
-              {enviando ? "Enviando…" : "Entrar con email"}
-            </button>
-          </form>
-        )}
+          )}
+          <button className="btn primary" disabled={cargando} type="submit">
+            {cargando ? "Un momento…" : textoBoton}
+          </button>
+        </form>
+
         {error && <p className="error">{error}</p>}
-        <p className="privacy">🔒 Sin contraseña: te mandamos un enlace mágico a tu correo.</p>
+        {aviso && <p className="aviso">{aviso}</p>}
+
+        <p className="privacy">
+          {modo === "entrar" && (
+            <>
+              ¿No tienes cuenta?{" "}
+              <a href="#" onClick={(e) => { e.preventDefault(); setModo("crear"); setError(""); setAviso(""); }}>
+                Crear una
+              </a>
+              {" · "}
+              <a href="#" onClick={(e) => { e.preventDefault(); setModo("recuperar"); setError(""); setAviso(""); }}>
+                ¿Olvidaste tu contraseña?
+              </a>
+            </>
+          )}
+          {modo !== "entrar" && (
+            <a href="#" onClick={(e) => { e.preventDefault(); setModo("entrar"); setError(""); setAviso(""); }}>
+              ← Volver a entrar
+            </a>
+          )}
+        </p>
+      </main>
+    </div>
+  );
+}
+
+// ============= ESTABLECER CONTRASEÑA (tras enlace de recuperación) =============
+
+function EstablecerPassword({ onListo }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  async function guardar(e) {
+    e.preventDefault();
+    setError("");
+    setGuardando(true);
+    const { error: e2 } = await supabase.auth.updateUser({ password });
+    setGuardando(false);
+    if (e2) setError(e2.message);
+    else onListo();
+  }
+
+  return (
+    <div className="app">
+      <main className="screen home">
+        <header className="brand">
+          <span className="spark">✦</span> retofoto
+        </header>
+        <h1>Crea tu contraseña</h1>
+        <p className="lead">A partir de ahora entrarás con tu email y esta contraseña, sin pasar por el correo cada vez.</p>
+        <form onSubmit={guardar} className="actions">
+          <input
+            className="input"
+            type="password"
+            required
+            minLength={6}
+            placeholder="Nueva contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button className="btn primary" disabled={guardando} type="submit">
+            {guardando ? "Guardando…" : "Guardar y entrar"}
+          </button>
+        </form>
+        {error && <p className="error">{error}</p>}
       </main>
     </div>
   );

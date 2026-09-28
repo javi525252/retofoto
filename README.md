@@ -23,9 +23,14 @@ supabase/schema.sql                Tablas, seguridad (RLS) y política del almac
 
 - El reto es el mismo para todos los grupos cada día (como en BeReal), pero **las fotos
   solo se ven dentro de tu grupo cerrado**.
-- No hay notificación push en esta primera versión: el reto está disponible en cuanto
-  alguien abre la app ese día. Al pulsar "Empezar el reto" arranca un contador personal
-  de 2 minutos; pasado ese tiempo puedes subir igualmente, pero queda marcado como "tarde".
+- El reto está disponible en cuanto alguien abre la app ese día. Al pulsar "Empezar el
+  reto" arranca un contador personal de 2 minutos; pasado ese tiempo puedes subir
+  igualmente, pero queda marcado como "tarde".
+- **Login con email y contraseña** (no con enlace mágico): así puedes entrar directamente
+  en cualquier navegador sin tener que abrir el correo cada vez. Los que se registraron
+  con el sistema antiguo (solo enlace mágico) verán un aviso al intentar entrar — deben
+  pulsar "¿Olvidaste tu contraseña?" una vez, revisar el email y crear su contraseña; a
+  partir de ahí entran con email + contraseña como cualquiera.
 - Hasta que no subes tu foto, no ves las de tu grupo (RLS de Supabase lo obliga a nivel
   de base de datos, no solo en la pantalla).
 - Cambiar el límite de tiempo: `VENTANA_SEGUNDOS` en `src/App.jsx`.
