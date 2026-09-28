@@ -1063,6 +1063,15 @@ function AjustesGrupo({ grupo, perfil, onVolver, onSalido }) {
           </div>
         )}
 
+        <p className="privacy" style={{ opacity: 0.6, fontSize: 11, wordBreak: "break-all" }}>
+          debug: appId="{String(window.ONESIGNAL_APP_ID)}" configurado=
+          {String(notificacionesConfiguradas())} OneSignalSDK=
+          {typeof window.OneSignal} swController=
+          {String(!!navigator.serviceWorker?.controller)} notifSoportado=
+          {String(typeof Notification !== "undefined")} permiso=
+          {typeof Notification !== "undefined" ? Notification.permission : "n/a"}
+        </p>
+
         <p className="label">Miembros</p>
         <section className="examples">
           {miembros?.map((m) => (
