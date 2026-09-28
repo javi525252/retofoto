@@ -5,7 +5,7 @@
 // de que el cron sea perfecto.
 
 const { createClient } = require("@supabase/supabase-js");
-const { llamarIA } = require("./_reto.js");
+const { llamarIA, enviarPush } = require("./_reto.js");
 
 function hoyISO() {
   // Fecha "de hoy" en referencia a España (Europe/Madrid), no en UTC del servidor,
@@ -72,6 +72,8 @@ exports.handler = async () => {
       }
       throw errInsert;
     }
+
+    await enviarPush(process.env.VITE_ONESIGNAL_APP_ID, process.env.ONESIGNAL_REST_API_KEY, insertado);
 
     return { statusCode: 200, headers: { "content-type": "application/json" }, body: JSON.stringify(insertado) };
   } catch (e) {

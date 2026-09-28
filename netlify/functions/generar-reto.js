@@ -8,7 +8,7 @@
 
 const { schedule } = require("@netlify/functions");
 const { createClient } = require("@supabase/supabase-js");
-const { llamarIA } = require("./_reto.js");
+const { llamarIA, enviarPush } = require("./_reto.js");
 
 function hoyISO() {
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -33,7 +33,9 @@ const handler = async () => {
   const prohibidos = (anteriores || []).map((r) => r.texto);
 
   const generado = await llamarIA(ANTHROPIC_API_KEY, process.env.ANTHROPIC_MODEL, prohibidos);
-  await supabase.from("retos").insert({ fecha, ...generado });
+  const { data: insertado } = await supabase.from("retos").insert({ fecha, ...generado }).select().single();
+
+  await enviarPush(process.env.VITE_ONESIGNAL_APP_ID, process.env.ONESIGNAL_REST_API_KEY, insertado || generado);
 
   return { statusCode: 200, body: "Reto generado." };
 };

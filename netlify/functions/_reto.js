@@ -131,4 +131,29 @@ async function llamarIA(apiKey, model, prohibidos) {
   };
 }
 
-module.exports = { llamarIA, pick };
+// Aviso push (OneSignal) de que ya hay reto nuevo. Si no está configurado
+// (faltan VITE_ONESIGNAL_APP_ID / ONESIGNAL_REST_API_KEY) simplemente no hace nada:
+// la app funciona igual sin notificaciones, esto es un extra.
+async function enviarPush(appId, restApiKey, reto) {
+  if (!appId || !restApiKey || !reto) return;
+  try {
+    await fetch("https://onesignal.com/api/v1/notifications", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        authorization: `Basic ${restApiKey}`,
+      },
+      body: JSON.stringify({
+        app_id: appId,
+        included_segments: ["Subscribed Users"],
+        headings: { es: `${reto.emoji || "📸"} Ya está el reto de hoy` },
+        contents: { es: reto.texto || "Entra a ver el reto de hoy." },
+        url: "/",
+      }),
+    });
+  } catch {
+    // un fallo enviando el push no debe romper la generación del reto
+  }
+}
+
+module.exports = { llamarIA, pick, enviarPush };

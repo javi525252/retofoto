@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase, supabaseConfigurado } from "./lib/supabase.js";
 import { compressImage, loadImageFromFile } from "./lib/image.js";
+import { notificacionesConfiguradas, pedirPermisoNotificaciones } from "./lib/push.js";
 
 const VENTANA_SEGUNDOS = 120; // 2 minutos, el "reto" personal desde que pulsas Empezar
 const EMOJIS_AVATAR = ["🙂", "😎", "🦊", "🐼", "🌵", "🍩", "🐸", "🦄", "🐙", "🐝", "🌙", "⚡"];
@@ -880,6 +881,17 @@ function Ranking({ grupo, onVolver }) {
 function AjustesGrupo({ grupo, perfil, onVolver, onSalido }) {
   const [miembros, setMiembros] = useState(null);
   const [error, setError] = useState("");
+  const [avisoPush, setAvisoPush] = useState("");
+  const [pidiendoPush, setPidiendoPush] = useState(false);
+
+  async function activarNotificaciones() {
+    setPidiendoPush(true);
+    const resultado = await pedirPermisoNotificaciones();
+    setPidiendoPush(false);
+    if (resultado === "concedido") setAvisoPush("🔔 Notificaciones activadas. Te avisaremos cuando salga el reto de hoy.");
+    else if (resultado === "denegado") setAvisoPush("Las notificaciones están bloqueadas para esta web en tu navegador/móvil.");
+    else setAvisoPush("No se ha podido activar. Inténtalo de nuevo en unos segundos.");
+  }
 
   useEffect(() => {
     (async () => {
@@ -928,6 +940,16 @@ function AjustesGrupo({ grupo, perfil, onVolver, onSalido }) {
             Compartir código
           </button>
         </div>
+
+        {notificacionesConfiguradas() && (
+          <div className="reto-card small">
+            <span>Avisos</span>
+            <button className="btn ghost" disabled={pidiendoPush} onClick={activarNotificaciones}>
+              {pidiendoPush ? "Activando…" : "🔔 Activar notificaciones"}
+            </button>
+            {avisoPush && <p className="privacy">{avisoPush}</p>}
+          </div>
+        )}
 
         <p className="label">Miembros</p>
         <section className="examples">

@@ -110,6 +110,28 @@ Si añades estas funciones a un proyecto ya desplegado, ejecuta una vez
 `supabase/migracion_2_interaccion.sql` en el SQL Editor de Supabase (no borra nada, solo añade
 las tablas y sus políticas).
 
+## Notificaciones push (OneSignal)
+
+Aviso al móvil de "ya está el reto de hoy" en cuanto se genera, sin depender de que
+cada uno abra la app. Es opcional: si no configuras las variables de abajo, la app
+funciona exactamente igual, solo que sin este aviso.
+
+1. Crea una cuenta gratis en [onesignal.com](https://onesignal.com) y una app de tipo
+   **Web Push**, apuntando a tu URL de Netlify (`https://tuapp.netlify.app`).
+2. En **Settings → Keys & IDs** copia el **App ID** y la **REST API Key**.
+3. Añade estas variables de entorno en Netlify (además de las 5 de siempre):
+   - `VITE_ONESIGNAL_APP_ID` → el App ID (no es secreta, se usa en el navegador)
+   - `ONESIGNAL_REST_API_KEY` → la REST API Key (🔒 secreta, marca la casilla)
+4. Vuelve a desplegar.
+5. En la app, entra en un grupo → ⚙️ Ajustes → **"🔔 Activar notificaciones"** y acepta
+   el permiso del navegador/móvil. Repite esto en cada dispositivo desde el que quieras
+   recibir avisos.
+
+Cómo funciona: cada vez que se genera un reto nuevo (el primero que abre la app ese
+día, o la función programada de las 08:00), se manda un push a todo el que tenga las
+notificaciones activadas. Como el reto es el mismo para todos los grupos, no hace
+falta segmentar por grupo.
+
 ## Ajustes rápidos
 
 - **Horario del reto**: la función programada `generar-reto.js` corre a las 08:00 UTC.
@@ -124,9 +146,6 @@ las tablas y sus políticas).
 
 ## Pendiente / ideas para más adelante
 
-- **Notificaciones push** de verdad (avisar a la hora del reto en vez de que cada uno
-  abra la app cuando quiera) — necesitaría un servicio como OneSignal o Firebase Cloud
-  Messaging, no está incluido en esta versión.
 - **Play Store**: `npm install @capacitor/core @capacitor/cli @capacitor/android`,
   `npx cap init`, `npx cap add android`, y apunta las llamadas de `/api/...` a la URL
   absoluta de Netlify (en Capacitor no hay redirección relativa).
