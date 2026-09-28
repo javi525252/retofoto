@@ -7,3 +7,10 @@ importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDKWorker.js");
 import { precacheAndRoute } from "workbox-precaching";
 
 precacheAndRoute(self.__WB_MANIFEST);
+
+// Cuando hay una versión nueva, que se active enseguida en vez de esperar a que
+// se cierren todas las pestañas (así los despliegues se notan sin tener que
+// borrar caché a mano).
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
